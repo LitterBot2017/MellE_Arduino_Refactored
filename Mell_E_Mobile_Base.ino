@@ -6,6 +6,7 @@
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_HMC5883_U.h>
+#include "BinFullness.h"
 
 //Watchdog
 long last_message = millis();
@@ -25,6 +26,9 @@ float right_motor;
 
 //Compass Stuff
 Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);
+
+//Bin fullness
+BinFullness* bin = new BinFullness(48,49);
 
 //Ros node and messages
 ros::NodeHandle executor_node;
@@ -75,7 +79,7 @@ void loop() {
 
   //Diagnostic Data
   data_msg.battery = 10;
-  data_msg.bin_fullness = 0;
+  data_msg.bin_fullness = bin->getBinFullness();
   data_msg.l_motor = left_motor;
   data_msg.r_motor = right_motor;
 

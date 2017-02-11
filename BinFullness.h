@@ -2,7 +2,7 @@
 #define BINFULLNESS_H
 
 #include "Arduino.h"
-#include <NewPing.h>
+#include "NewPing.h"
 
 #define MAX_DISTANCE 100
 #define BIN_EMPTY_DISTANCE 66
