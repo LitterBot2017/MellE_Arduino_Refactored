@@ -8,6 +8,7 @@
 #include <Adafruit_HMC5883_U.h>
 #include "PressureSensor.h"
 #include "BinFullness.h"
+#include "Relay.h"
 
 //Watchdog
 long last_message = millis();
@@ -34,6 +35,9 @@ BinFullness* bin = new BinFullness(48,49);
 //PressureSensor
 PressureSensor pressure(A5);
 
+//Relay
+Relay relay(31);
+
 //Ros node and messages
 ros::NodeHandle executor_node;
 melle_refactored::MellE_msg data_msg;
@@ -53,6 +57,10 @@ void pc_callback (const melle_refactored::PC_msg& msg)
   last_message = millis();
   motor_control.ForwardBackwardM1(mc_address,left_motor);
   motor_control.ForwardBackwardM2(mc_address,right_motor);
+  if(msg.relay_state)
+    relay.RelayOn();
+  else
+    relay.RelayOff();
 }
 ros::Subscriber <melle_refactored::PC_msg> pc_msg_subs("PC_msg", &pc_callback);
 
