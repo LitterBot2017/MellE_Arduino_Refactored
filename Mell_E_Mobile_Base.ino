@@ -1,6 +1,6 @@
 #include <ros.h>
-#include <melle_refactored/MellE_msg.h>
-#include <melle_refactored/PC_msg.h>
+#include <navigation/Arduino.h>
+#include <navigation/Navigation.h>
 #include <TinyGPS++.h>
 #include <RoboClaw.h>
 #include <Wire.h>
@@ -9,6 +9,7 @@
 #include "PressureSensor.h"
 #include "BinFullness.h"
 #include "Relay.h"
+#include "VoltageSensor.h"
 
 //Watchdog
 long last_message = millis();
@@ -20,9 +21,7 @@ RoboClaw motor_control(&Serial2, 10000);
 //GPS Stuff
 static const uint32_t GPSBaud = 9600;
 TinyGPSPlus gps;
-float des_lat;
-float des_long;
-int waypoint_id;
+
 float left_motor;
 float right_motor;
 
@@ -39,30 +38,34 @@ PressureSensor pressure(A5);
 Relay relay(31);
 
 //Ros node and messages
-ros::NodeHandle executor_node;
-melle_refactored::MellE_msg data_msg;
-melle_refactored::PC_msg msg_received;
+ros::NodeHandle ros_node;
+navigation::Arduino arduino_msg;
+navigation::Navigation pc_msg;
 
-//Publisher stuff
-ros::Publisher executor_pub("MellE_msg", &data_msg);
+// Arduino Publisher
+ros::Publisher arduino_pub("arduino", &arduino_msg);
 
-//Subscriber stuff
-void pc_callback (const melle_refactored::PC_msg& msg)
-{
-  des_lat = msg.dest_lat;
-  des_long = msg.dest_long;
-  waypoint_id = msg.waypoint_id;
-  left_motor = msg.l_motor_val;
-  right_motor = msg.r_motor_val;
+int voltageSensorPin = A0;
+VoltageSensor voltageSensor = VoltageSensor(voltageSensorPin);
+
+// PC subscriber callback
+void pc_callback (const navigation::Navigation& pc_msg) {
+
+  left_motor = pc_msg.l_motor_val;
+  right_motor = pc_msg.r_motor_val;
   last_message = millis();
-  motor_control.ForwardBackwardM1(mc_address,left_motor);
-  motor_control.ForwardBackwardM2(mc_address,right_motor);
-  if(msg.relay_state)
+
+  motor_control.ForwardBackwardM1(mc_address, left_motor);
+  motor_control.ForwardBackwardM2(mc_address, right_motor);
+
+  if(pc_msg.relay_state)
     relay.RelayOn();
   else
     relay.RelayOff();
 }
-ros::Subscriber <melle_refactored::PC_msg> pc_msg_subs("PC_msg", &pc_callback);
+
+// PC Subscriber
+ros::Subscriber <navigation::Navigation> pc_sub("navigation", &pc_callback);
 
 void setup() {
   // put your setup code here, to run once:
@@ -71,41 +74,45 @@ void setup() {
   {
     while(1);
   }
-  executor_node.initNode();
-  executor_node.advertise(executor_pub);
-  executor_node.subscribe(pc_msg_subs);
+  ros_node.initNode();
+  
+  ros_node.advertise(arduino_pub);
+  
+  ros_node.subscribe(pc_sub);
+  
   motor_control.begin(38400);
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
+  
   //GPS
   while (Serial1.available() > 0)
+  
   if (gps.encode(Serial1.read()))
       sendInfo();
   
-  //Compass
+  // Compass
   sensors_event_t event; 
   mag.getEvent(&event);
   calcHeading(event);
 
-  //Diagnostic Data
-  data_msg.battery = 10;
-  data_msg.bin_fullness = bin->getBinFullness();
-  data_msg.pickup_state=pressure.GetPickupState();
-  data_msg.l_motor = left_motor;
-  data_msg.r_motor = right_motor;
+  // Diagnostic Data
+  arduino_msg.battery = voltageSensor.getBatteryPercentage();
+  arduino_msg.bin_fullness = bin->getBinFullness();
+  arduino_msg.pickup_state=pressure.GetPickupState();
+  arduino_msg.l_motor = left_motor;
+  arduino_msg.r_motor = right_motor;
 
-  //watchdog
+  // Watchdog
   if(millis()-last_message>1000)
   {
     motor_control.ForwardBackwardM1(mc_address,64);
     motor_control.ForwardBackwardM2(mc_address,64);
   }
   
-  //Ros publish
-  executor_pub.publish(&data_msg);
-  executor_node.spinOnce();
+  // Publish Arduino message on ROS
+  arduino_pub.publish(&arduino_msg);
+  ros_node.spinOnce();
   delay(100);
 }
 
@@ -132,14 +139,14 @@ void calcHeading(sensors_event_t event)
    
   // Convert radians to degrees for readability.
   float headingDegrees = heading * 180/M_PI; 
-  data_msg.heading=headingDegrees;
+  arduino_msg.heading=headingDegrees;
 }
 
 void sendInfo()
 {
-  data_msg.curr_lat=gps.location.lat();
-  data_msg.curr_long=gps.location.lng();
-  data_msg.speed_val=gps.speed.mps();
-  data_msg.elapsed_time=millis();
-  data_msg.sats=gps.location.isValid();
+  arduino_msg.curr_lat = gps.location.lat();
+  arduino_msg.curr_long = gps.location.lng();
+  arduino_msg.speed_val = gps.speed.mps();
+  arduino_msg.elapsed_time = millis();
+  arduino_msg.sats = gps.location.isValid();
 }
