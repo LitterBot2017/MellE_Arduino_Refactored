@@ -113,7 +113,7 @@ void loop() {
   // Publish Arduino message on ROS
   arduino_pub.publish(&arduino_msg);
   ros_node.spinOnce();
-  delay(100);
+  delay(50);
 }
 
 void calcHeading(sensors_event_t event)
